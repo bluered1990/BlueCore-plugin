@@ -5,56 +5,54 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
-    strategy:
-      matrix:
-        java: [ '21' ]
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Java ${{ matrix.java }}
+        
+      - name: Validate folder exists
+        run: |
+          echo "Checking for BlueCore_Organized folder..."
+          if [ -d "BlueCore_Organized" ]; then
+            echo "✓ Found BlueCore_Organized/"
+            echo "Contents:"
+            ls -la BlueCore_Organized/
+          else
+            echo "✗ BlueCore_Organized/ not found!"
+            echo "Current structure:"
+            ls -la
+            exit 1
+          fi
+          
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
+          java-version: '21'
           distribution: 'temurin'
-          java-version: ${{ matrix.java }}
           cache: 'maven'
-
-      - name: Validate pom.xml
+          
+      - name: Build from BlueCore_Organized folder
+        working-directory: BlueCore_Organized
         run: |
-          cd BlueCore
-          mvn help:effective-pom -q
-
-      - name: Build with Maven
-        working-directory: BlueCore
-        run: mvn clean compile package -DskipTests
-
-      - name: Test the JAR file
-        working-directory: BlueCore
+          echo "Building from BlueCore_Organized..."
+          mvn clean package -DskipTests
+          
+      - name: Verify JAR file
         run: |
-          echo "Checking JAR file..."
-          jar tf target/*.jar | head -20
-          echo "JAR contains $(jar tf target/*.jar | wc -l) files"
-
-      - name: Upload JAR artifact
+          echo "=== Generated JAR ==="
+          ls -la BlueCore_Organized/target/*.jar
+          echo ""
+          echo "=== JAR size ==="
+          du -h BlueCore_Organized/target/*.jar
+          
+      - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BlueCore-${{ github.sha }}
-          path: BlueCore/target/BlueCore-*.jar
+          name: BlueCore-Plugin
+          path: BlueCore_Organized/target/*.jar
           retention-days: 30
-
-      - name: Upload all artifacts (for debugging)
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-output-${{ github.sha }}
-          path: BlueCore/target/
-          retention-days: 7
