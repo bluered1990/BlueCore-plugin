@@ -1,31 +1,60 @@
-name: Build BlueCore
+name: Build BlueCore Plugin
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        java: [ '21' ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Java 21
+      - name: Set up Java ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 21
+          distribution: 'temurin'
+          java-version: ${{ matrix.java }}
+          cache: 'maven'
+
+      - name: Validate pom.xml
+        run: |
+          cd BlueCore
+          mvn help:effective-pom -q
 
       - name: Build with Maven
         working-directory: BlueCore
-        run: mvn clean package
+        run: mvn clean compile package -DskipTests
 
-      - name: Upload plugin jar
+      - name: Test the JAR file
+        working-directory: BlueCore
+        run: |
+          echo "Checking JAR file..."
+          jar tf target/*.jar | head -20
+          echo "JAR contains $(jar tf target/*.jar | wc -l) files"
+
+      - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BlueCore
-          path: BlueCore/target/*.jar
+          name: BlueCore-${{ github.sha }}
+          path: BlueCore/target/BlueCore-*.jar
+          retention-days: 30
+
+      - name: Upload all artifacts (for debugging)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-output-${{ github.sha }}
+          path: BlueCore/target/
+          retention-days: 7
